@@ -12,14 +12,15 @@ let alertTimingDirty = false;
 let alertToneDirty = false;
 let previewAudioContext;
 const PREVIEW_TONES = {
-  beep: [{ frequency: 880, duration: 0.22, delay: 0, wave: "sine" }],
+  beep: [{ frequency: 880, duration: 0.3, delay: 0, wave: "sine" }],
   double: [
-    { frequency: 740, duration: 0.12, delay: 0, wave: "sine" },
-    { frequency: 740, duration: 0.12, delay: 0.18, wave: "sine" }
+    { frequency: 440, duration: 0.16, delay: 0, wave: "square" },
+    { frequency: 440, duration: 0.16, delay: 0.32, wave: "square" }
   ],
   chime: [
-    { frequency: 660, duration: 0.14, delay: 0, wave: "triangle" },
-    { frequency: 990, duration: 0.2, delay: 0.13, wave: "triangle" }
+    { frequency: 523, duration: 0.25, delay: 0, wave: "triangle" },
+    { frequency: 659, duration: 0.25, delay: 0.16, wave: "triangle" },
+    { frequency: 784, duration: 0.35, delay: 0.32, wave: "triangle" }
   ]
 };
 
@@ -216,8 +217,9 @@ function markAlertToneDirty() {
 }
 document.querySelectorAll('input[name="alert-tone"]').forEach(input => input.addEventListener("change", markAlertToneDirty));
 document.querySelectorAll(".try-tone").forEach(button => button.addEventListener("click", async () => {
-  document.getElementById("alert-tone-confirmation").textContent = `Playing ${button.dataset.tone}…`;
-  await playPreviewTone(button.dataset.tone);
+  const selectedTone = document.querySelector('input[name="alert-tone"]:checked').value;
+  document.getElementById("alert-tone-confirmation").textContent = `Playing ${selectedTone}…`;
+  await playPreviewTone(selectedTone);
 }));
 document.getElementById("save-alert-tone").addEventListener("click", async () => {
   await send({
