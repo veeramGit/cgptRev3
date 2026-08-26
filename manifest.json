@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Multi-Interval Trading Timer",
-  "version": "1.0.0",
-  "version_name": "NSE Time V2",
+  "version": "1.3.0",
+  "version_name": "NSE Timer v1.3",
   "description": "Multi-interval candle timers with desktop notifications and an alert beep.",
   "permissions": [
     "alarms",
