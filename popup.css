@@ -55,9 +55,13 @@ h3 {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 6px;
   margin: 0 0 9px;
   font-size: 12px;
+}
+
+.market-timing-label {
+  white-space: nowrap;
 }
 
 .market-time-range {
@@ -67,7 +71,7 @@ h3 {
 }
 
 .market-open input {
-  width: 72px;
+  width: 96px;
   padding: 4px;
   font: inherit;
 }
@@ -314,6 +318,7 @@ h3 {
 }
 
 .progress-track {
+  position: relative;
   flex: 1;
   height: 3px;
   overflow: hidden;
@@ -324,6 +329,17 @@ h3 {
   height: 100%;
   background: #1976d2;
   transition: width .2s linear;
+}
+
+.alert-marker {
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: #d32f2f;
+  transform: translateX(-1px);
+  pointer-events: none;
 }
 
 .alert-left {
@@ -361,4 +377,9 @@ button:disabled {
   margin: 8px 0 0;
   color: #777;
   font-size: 11px;
+}
+
+.note.note-error {
+  color: #b42318;
+  font-weight: bold;
 }

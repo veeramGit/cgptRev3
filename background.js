@@ -15,6 +15,7 @@ chrome.runtime.onInstalled.addListener(async () => {
         intervals: {},
         marketOpenTime: DEFAULT_MARKET_OPEN_TIME,
         marketCloseTime: DEFAULT_MARKET_CLOSE_TIME,
+        startBlockedReason: "",
         alertTiming: DEFAULT_ALERT_TIMING,
         alertOffsetSeconds: DEFAULT_ALERT_OFFSET_SECONDS,
         alertTone: DEFAULT_ALERT_TONE
@@ -112,7 +113,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 chrome.alarms.onAlarm.addListener(async alarm => {
   if (alarm.name === "market-close") {
     const state = await getState();
-    if (state.running) await stopAll();
+    if (state.running) await stopAll(true, marketEndNote(state));
     return;
   }
 
@@ -124,7 +125,7 @@ chrome.alarms.onAlarm.addListener(async alarm => {
   const item = state.intervals?.[minutes];
 
   if (!state.running || !item?.enabled || isMarketClosed(state)) {
-    if (isMarketClosed(state)) await stopAll();
+    if (isMarketClosed(state)) await stopAll(true, marketEndNote(state));
     await chrome.alarms.clear(alarm.name);
     return;
   }
@@ -147,6 +148,7 @@ async function getState() {
     intervals: {},
     marketOpenTime: DEFAULT_MARKET_OPEN_TIME,
     marketCloseTime: DEFAULT_MARKET_CLOSE_TIME,
+    startBlockedReason: "",
     alertTiming: DEFAULT_ALERT_TIMING,
     alertOffsetSeconds: DEFAULT_ALERT_OFFSET_SECONDS,
     alertTone: DEFAULT_ALERT_TONE,
@@ -156,6 +158,7 @@ async function getState() {
     ...state,
     intervals: state.intervals || {},
     lastAlerts: state.lastAlerts || {},
+    startBlockedReason: typeof state.startBlockedReason === "string" ? state.startBlockedReason : "",
     marketOpenTime: validMarketOpenTime(state.marketOpenTime)
       ? state.marketOpenTime
       : DEFAULT_MARKET_OPEN_TIME,
@@ -191,6 +194,7 @@ async function startAll(enabled, marketOpenTime, marketCloseTime, alertTiming, a
     running: true,
     intervals,
     lastAlerts: {},
+    startBlockedReason: "",
     marketOpenTime: validMarketOpenTime(marketOpenTime)
       ? marketOpenTime
       : DEFAULT_MARKET_OPEN_TIME,
@@ -207,6 +211,7 @@ async function startAll(enabled, marketOpenTime, marketCloseTime, alertTiming, a
 
   if (isMarketClosed(state)) {
     state.running = false;
+    state.startBlockedReason = `Timers cannot start after the market end time (${state.marketCloseTime}).`;
     await chrome.storage.local.set({ timers: state });
     return;
   }
@@ -220,7 +225,7 @@ async function startAll(enabled, marketOpenTime, marketCloseTime, alertTiming, a
   }
 }
 
-async function stopAll(saveState = true) {
+async function stopAll(saveState = true, statusNote = "") {
   for (const minutes of INTERVALS) {
     await chrome.alarms.clear(alarmName(minutes));
   }
@@ -229,13 +234,14 @@ async function stopAll(saveState = true) {
   if (saveState) {
     const state = await getState();
     state.running = false;
+    if (statusNote) state.startBlockedReason = statusNote;
     await chrome.storage.local.set({ timers: state });
   }
 }
 
 async function recreateAlarms(state) {
   if (isMarketClosed(state)) {
-    await stopAll();
+    await stopAll(true, marketEndNote(state));
     return;
   }
   await scheduleMarketCloseAlarm(state);
@@ -288,6 +294,10 @@ function marketCloseTimestamp(marketCloseTime) {
 
 function isMarketClosed(state) {
   return Date.now() >= marketCloseTimestamp(state.marketCloseTime);
+}
+
+function marketEndNote(state) {
+  return `Timers stopped at the market end time (${state.marketCloseTime}).`;
 }
 
 async function scheduleMarketCloseAlarm(state) {

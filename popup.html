@@ -11,18 +11,17 @@
       <img src="icon128.png" alt="NSE Timer logo">
       <div>
         <h1>NSE Timer</h1>
-        <p>V2</p>
       </div>
     </header>
 
     <div class="actual-time" align="right">Current time: <time id="actual-time" style="color: darkblue;">--:--:--</time></div>
 
     <div class="market-open">
-      <label for="market-open-time">Market Timing</label>
+      <span class="market-timing-label">Market Timing</span>
       <span class="market-time-range">
-        <input type="text" id="market-open-time" value="09:15 AM" inputmode="numeric" placeholder="HH:MM AM" aria-label="Market start time">
+        <input type="time" id="market-open-time" value="09:15" aria-label="Market start time">
         <span aria-hidden="true">to</span>
-        <input type="text" id="market-close-time" value="03:30 PM" inputmode="numeric" placeholder="HH:MM PM" aria-label="Market end time">
+        <input type="time" id="market-close-time" value="15:30" aria-label="Market end time">
       </span>
     </div>
 
@@ -104,7 +103,7 @@
       <button id="stop" disabled>Stop All</button>
     </div>
 
-    <p class="note">Timers continue while this popup is closed.</p>
+    <p id="timer-note" class="note">Timers continue while this popup is closed.</p>
   </main>
   <script src="popup.js"></script>
 </body>

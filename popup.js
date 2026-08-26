@@ -41,12 +41,12 @@ async function refresh() {
   const state = await getState();
   document.getElementById("actual-time").dateTime = new Date().toISOString();
   document.getElementById("actual-time").textContent = new Date().toLocaleTimeString([], {
-    hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false
+    hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true
   });
   const marketOpenInput = document.getElementById("market-open-time");
   const marketCloseInput = document.getElementById("market-close-time");
-  if (document.activeElement !== marketOpenInput) marketOpenInput.value = formatMarketTime(state.marketOpenTime);
-  if (document.activeElement !== marketCloseInput) marketCloseInput.value = formatMarketTime(state.marketCloseTime);
+  if (document.activeElement !== marketOpenInput) marketOpenInput.value = state.marketOpenTime;
+  if (document.activeElement !== marketCloseInput) marketCloseInput.value = state.marketCloseTime;
   if (!alertTimingDirty) {
     document.querySelector(`input[name="alert-timing"][value="${state.alertTiming}"]`).checked = true;
   }
@@ -74,13 +74,18 @@ async function refresh() {
       const timerRemaining = getTimerRemaining(state, minutes);
       const timerProgress = Math.max(0, Math.min(100,
         100 - timerRemaining / (minutes * 60 * 1000) * 100));
+      const markerPosition = getAlertMarkerPosition(state, minutes);
       status.innerHTML = `<div class="interval-progress"><div class="progress-track">` +
-        `<div class="progress-fill" style="width: ${timerProgress}%"></div></div>` +
+        `<div class="progress-fill" style="width: ${timerProgress}%"></div>` +
+        `<span class="alert-marker" style="left: ${markerPosition}%" title="Alert time"></span></div>` +
         `<span>${formatCountdown(timerRemaining)}</span></div>` +
         `<span class="alert-left">${formatAlertRemaining(state, minutes)} for Alert</span>`;
     }
   }
   document.getElementById("stop").disabled = !state.running;
+  const timerNote = document.getElementById("timer-note");
+  timerNote.textContent = state.startBlockedReason || "Timers continue while this popup is closed.";
+  timerNote.classList.toggle("note-error", Boolean(state.startBlockedReason));
 }
 
 function getTimerRemaining(state, minutes) {
@@ -104,6 +109,12 @@ function formatAlertRemaining(state, minutes) {
   return formatCountdown(target - now);
 }
 
+function getAlertMarkerPosition(state, minutes) {
+  const offsetPercent = state.alertOffsetSeconds / (minutes * 60) * 100;
+  const position = state.alertTiming === "after" ? offsetPercent : 100 - offsetPercent;
+  return Math.max(0, Math.min(100, position));
+}
+
 function formatCountdown(milliseconds) {
   const seconds = Math.max(0, Math.floor(milliseconds / 1000));
   return `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
@@ -115,17 +126,6 @@ function marketOpenTimestamp(value) {
 function validMarketOpenTime(value) { return /^([01]\d|2[0-3]):[0-5]\d$/.test(value || ""); }
 function validMarketCloseTime(value, marketOpenTime) {
   return validMarketOpenTime(value) && validMarketOpenTime(marketOpenTime) && value > marketOpenTime;
-}
-function parseMarketTime(value) {
-  const match = /^(0[1-9]|1[0-2]):([0-5]\d)\s*(AM|PM)$/i.exec((value || "").trim());
-  if (!match) return null;
-  let hours = Number(match[1]) % 12;
-  if (match[3].toUpperCase() === "PM") hours += 12;
-  return `${String(hours).padStart(2, "0")}:${match[2]}`;
-}
-function formatMarketTime(value) {
-  const [hours, minutes] = (validMarketOpenTime(value) ? value : "09:15").split(":").map(Number);
-  return `${String(hours % 12 || 12).padStart(2, "0")}:${String(minutes).padStart(2, "0")} ${hours >= 12 ? "PM" : "AM"}`;
 }
 function validAlertOffset(value) { return Number.isInteger(Number(value)) && Number(value) >= 0 && Number(value) <= 180; }
 function validAlertTone(value) { return ["beep", "double", "chime"].includes(value); }
@@ -162,8 +162,8 @@ document.querySelectorAll('input[type="checkbox"]').forEach(input => input.addEv
 }));
 document.getElementById("start").addEventListener("click", async () => {
   const enabled = Object.fromEntries(intervals.map(minutes => [minutes, document.getElementById(`timer-${minutes}`).checked]));
-  await send({ type: "start", enabled, marketOpenTime: parseMarketTime(document.getElementById("market-open-time").value),
-    marketCloseTime: parseMarketTime(document.getElementById("market-close-time").value),
+  await send({ type: "start", enabled, marketOpenTime: document.getElementById("market-open-time").value,
+    marketCloseTime: document.getElementById("market-close-time").value,
     alertTiming: document.querySelector('input[name="alert-timing"]:checked').value,
     alertOffsetSeconds: document.getElementById("alert-offset-seconds").value,
     alertTone: document.querySelector('input[name="alert-tone"]:checked').value });
@@ -174,8 +174,8 @@ document.getElementById("start").addEventListener("click", async () => {
 document.querySelectorAll("#market-open-time, #market-close-time").forEach(input => input.addEventListener("change", async () => {
   await send({
     type: "setMarketTimes",
-    marketOpenTime: parseMarketTime(document.getElementById("market-open-time").value),
-    marketCloseTime: parseMarketTime(document.getElementById("market-close-time").value)
+    marketOpenTime: document.getElementById("market-open-time").value,
+    marketCloseTime: document.getElementById("market-close-time").value
   });
   refresh();
 }));
