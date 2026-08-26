@@ -1,0 +1,111 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Multi-Interval Trading Timer</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <main>
+    <header class="app-header">
+      <img src="icon128.png" alt="NSE Timer logo">
+      <div>
+        <h1>NSE Timer</h1>
+        <p>V2</p>
+      </div>
+    </header>
+
+    <div class="actual-time" align="right">Current time: <time id="actual-time" style="color: darkblue;">--:--:--</time></div>
+
+    <div class="market-open">
+      <label for="market-open-time">Market Timing</label>
+      <span class="market-time-range">
+        <input type="text" id="market-open-time" value="09:15 AM" inputmode="numeric" placeholder="HH:MM AM" aria-label="Market start time">
+        <span aria-hidden="true">to</span>
+        <input type="text" id="market-close-time" value="03:30 PM" inputmode="numeric" placeholder="HH:MM PM" aria-label="Market end time">
+      </span>
+    </div>
+
+    <details class="settings-panel alert-settings">
+      <summary>Alert timing</summary>
+      <div class="alert-line">
+        <span class="alert-label">Alert</span>
+        <label><input type="radio" name="alert-timing" value="before" checked> Before</label>
+        <label><input type="radio" name="alert-timing" value="after"> After</label>
+        <span class="alert-input-wrap">
+          <input type="number" id="alert-offset-seconds" min="0" max="180" step="1" value="15" aria-label="Alert seconds">
+          <span class="alert-presets" role="listbox" aria-label="Seconds suggestions">
+            <button type="button" data-seconds="15">15</button>
+            <button type="button" data-seconds="30">30</button>
+            <button type="button" data-seconds="60">60</button>
+          </span>
+        </span>
+        <span>Secs</span>
+        <button type="button" id="save-alert-timing" disabled aria-label="Apply alert settings" title="Apply alert settings">✓</button>
+      </div>
+      <p id="alert-timing-confirmation" class="alert-timing-confirmation" aria-live="polite"></p>
+    </details>
+
+    <details class="settings-panel audio-settings">
+      <summary>Alert sound</summary>
+      <div class="audio-line">
+        <span class="audio-label">Sound</span>
+        <span class="tone-option">
+          <label><input type="radio" name="alert-tone" value="beep" checked> Beep</label>
+        </span>
+        <span class="tone-option">
+          <label><input type="radio" name="alert-tone" value="double"> Double</label>
+        </span>
+        <span class="tone-option">
+          <label><input type="radio" name="alert-tone" value="chime"> Chime</label>
+        </span>
+        <button type="button" class="try-tone" data-tone="chime">Try</button>
+        <button type="button" id="save-alert-tone" disabled>Fix</button>
+      </div>
+      <p id="alert-tone-confirmation" class="audio-confirmation" aria-live="polite"></p>
+    </details>
+
+    <h3>Select Active Chart Intervals:</h3>
+
+    <div class="timer-row" data-minutes="1">
+      <input type="checkbox" id="timer-1">
+      <label for="timer-1">1 Minute Timer</label>
+      <span id="status-1">Disabled</span>
+    </div>
+
+    <div class="timer-row" data-minutes="3">
+      <input type="checkbox" id="timer-3">
+      <label for="timer-3">3 Minute Timer</label>
+      <span id="status-3">Disabled</span>
+    </div>
+
+    <div class="timer-row" data-minutes="5">
+      <input type="checkbox" id="timer-5">
+      <label for="timer-5">5 Minute Timer</label>
+      <span id="status-5">Disabled</span>
+    </div>
+
+    <div class="timer-row" data-minutes="15">
+      <input type="checkbox" id="timer-15">
+      <label for="timer-15">15 Minute Timer</label>
+      <span id="status-15">Disabled</span>
+    </div>
+
+    <div class="timer-row" data-minutes="60">
+      <input type="checkbox" id="timer-60">
+      <label for="timer-60">1 Hour Timer</label>
+      <span id="status-60">Disabled</span>
+    </div>
+
+    <hr>
+
+    <div class="controls">
+      <button id="start">Start / Restart All</button>
+      <button id="stop" disabled>Stop All</button>
+    </div>
+
+    <p class="note">Timers continue while this popup is closed.</p>
+  </main>
+  <script src="popup.js"></script>
+</body>
+</html>
