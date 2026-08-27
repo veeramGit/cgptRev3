@@ -4,6 +4,19 @@ const DEFAULT_MARKET_CLOSE_TIME = "15:30";
 const DEFAULT_ALERT_TIMING = "before";
 const DEFAULT_ALERT_OFFSET_SECONDS = 15;
 const DEFAULT_ALERT_TONE = "beep";
+const DEFAULT_MARKET = "nse";
+const MARKETS = {
+  nse: { open: "09:15", close: "15:30" },
+  nikkei: { open: "09:00", close: "15:30" },
+  kospi: { open: "09:00", close: "15:30" },
+  ftse: { open: "08:00", close: "16:30" },
+  dax: { open: "09:00", close: "17:30" },
+  sp500: { open: "09:30", close: "16:00" },
+  dow: { open: "09:30", close: "16:00" },
+  nasdaq: { open: "09:30", close: "16:00" },
+  gold: { open: "08:20", close: "13:30" },
+  bitcoin: { open: "00:00", close: "23:59" }
+};
 let activeTonePlayback;
 
 chrome.runtime.onInstalled.addListener(async () => {
@@ -15,6 +28,7 @@ chrome.runtime.onInstalled.addListener(async () => {
         intervals: {},
         marketOpenTime: DEFAULT_MARKET_OPEN_TIME,
         marketCloseTime: DEFAULT_MARKET_CLOSE_TIME,
+        market: DEFAULT_MARKET,
         startBlockedReason: "",
         alertTiming: DEFAULT_ALERT_TIMING,
         alertOffsetSeconds: DEFAULT_ALERT_OFFSET_SECONDS,
@@ -63,24 +77,59 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     if (message.type === "setMarketTimes") {
       const state = await getState();
-      state.marketOpenTime = validMarketOpenTime(message.marketOpenTime)
+      const marketOpenTime = validMarketOpenTime(message.marketOpenTime)
         ? message.marketOpenTime
         : DEFAULT_MARKET_OPEN_TIME;
-      state.marketCloseTime = validMarketCloseTime(message.marketCloseTime, state.marketOpenTime)
+      const marketCloseTime = validMarketCloseTime(message.marketCloseTime, marketOpenTime)
         ? message.marketCloseTime
         : DEFAULT_MARKET_CLOSE_TIME;
-      await chrome.storage.local.set({ timers: state });
+      const marketChanged = state.marketOpenTime !== marketOpenTime ||
+        state.marketCloseTime !== marketCloseTime;
+      state.marketOpenTime = marketOpenTime;
+      state.marketCloseTime = marketCloseTime;
+      state.market = "custom";
 
-      if (state.running) await recreateAlarms(state);
+      if (state.running && marketChanged) {
+        await restartAllTimers(state);
+      } else {
+        await chrome.storage.local.set({ timers: state });
+      }
+    }
+
+    if (message.type === "setMarket") {
+      const market = validMarket(message.market) ? message.market : DEFAULT_MARKET;
+      const state = await getState();
+      const preset = MARKETS[market];
+      const marketChanged = state.market !== market || (preset &&
+        (state.marketOpenTime !== preset.open || state.marketCloseTime !== preset.close));
+      state.market = market;
+      if (preset) {
+        state.marketOpenTime = preset.open;
+        state.marketCloseTime = preset.close;
+      }
+
+      if (state.running && marketChanged) {
+        await restartAllTimers(state);
+      } else {
+        await chrome.storage.local.set({ timers: state });
+      }
     }
 
     if (message.type === "setAlertTiming") {
       const state = await getState();
-      state.alertTiming = message.alertTiming === "after" ? "after" : DEFAULT_ALERT_TIMING;
-      state.alertOffsetSeconds = validAlertOffset(message.alertOffsetSeconds)
+      const alertTiming = message.alertTiming === "after" ? "after" : DEFAULT_ALERT_TIMING;
+      const alertOffsetSeconds = validAlertOffset(message.alertOffsetSeconds)
         ? Number(message.alertOffsetSeconds) : DEFAULT_ALERT_OFFSET_SECONDS;
-      await chrome.storage.local.set({ timers: state });
-      if (state.running) await recreateAlarms(state);
+      const alertTimeChanged = state.alertTiming !== alertTiming ||
+        state.alertOffsetSeconds !== alertOffsetSeconds;
+      state.alertTiming = alertTiming;
+      state.alertOffsetSeconds = alertOffsetSeconds;
+
+      if (state.running && alertTimeChanged) {
+        await restartAllTimers(state);
+      } else {
+        await chrome.storage.local.set({ timers: state });
+      }
     }
 
     if (message.type === "setAlertTone") {
@@ -97,7 +146,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     if (message.type === "start") {
       await startAll(message.enabled, message.marketOpenTime, message.marketCloseTime, message.alertTiming,
-        message.alertOffsetSeconds, message.alertTone);
+        message.alertOffsetSeconds, message.alertTone, message.market);
     }
 
     if (message.type === "stop") {
@@ -148,6 +197,7 @@ async function getState() {
     intervals: {},
     marketOpenTime: DEFAULT_MARKET_OPEN_TIME,
     marketCloseTime: DEFAULT_MARKET_CLOSE_TIME,
+    market: DEFAULT_MARKET,
     startBlockedReason: "",
     alertTiming: DEFAULT_ALERT_TIMING,
     alertOffsetSeconds: DEFAULT_ALERT_OFFSET_SECONDS,
@@ -165,6 +215,9 @@ async function getState() {
     marketCloseTime: validMarketCloseTime(state.marketCloseTime, state.marketOpenTime)
       ? state.marketCloseTime
       : DEFAULT_MARKET_CLOSE_TIME,
+    market: validMarket(state.market)
+      ? state.market
+      : marketForTimes(state.marketOpenTime, state.marketCloseTime),
     alertTiming: state.alertTiming === "after" ? "after" : DEFAULT_ALERT_TIMING,
     alertOffsetSeconds: validAlertOffset(state.alertOffsetSeconds)
       ? Number(state.alertOffsetSeconds) : DEFAULT_ALERT_OFFSET_SECONDS,
@@ -177,7 +230,7 @@ function alarmName(minutes) {
   return `timer-${minutes}`;
 }
 
-async function startAll(enabled, marketOpenTime, marketCloseTime, alertTiming, alertOffsetSeconds, alertTone) {
+async function startAll(enabled, marketOpenTime, marketCloseTime, alertTiming, alertOffsetSeconds, alertTone, market) {
   await stopAll(false);
 
   const now = Date.now();
@@ -201,6 +254,7 @@ async function startAll(enabled, marketOpenTime, marketCloseTime, alertTiming, a
     marketCloseTime: validMarketCloseTime(marketCloseTime, marketOpenTime)
       ? marketCloseTime
       : DEFAULT_MARKET_CLOSE_TIME,
+    market: validMarket(market) ? market : DEFAULT_MARKET,
     alertTiming: alertTiming === "after" ? "after" : DEFAULT_ALERT_TIMING,
     alertOffsetSeconds: validAlertOffset(alertOffsetSeconds)
       ? Number(alertOffsetSeconds) : DEFAULT_ALERT_OFFSET_SECONDS,
@@ -251,6 +305,33 @@ async function recreateAlarms(state) {
     const item = state.intervals?.[minutes];
     if (!item?.enabled) continue;
     await scheduleAlarm(minutes, state);
+  }
+}
+
+async function restartAllTimers(state) {
+  await stopAll(false);
+
+  const now = Date.now();
+  for (const minutes of INTERVALS) {
+    const item = state.intervals?.[minutes];
+    if (item?.enabled) item.startTime = now;
+  }
+  state.lastAlerts = {};
+  state.startBlockedReason = "";
+  await chrome.storage.local.set({ timers: state });
+
+  if (isMarketClosed(state)) {
+    state.running = false;
+    state.startBlockedReason = marketEndNote(state);
+    await chrome.storage.local.set({ timers: state });
+    return;
+  }
+
+  await scheduleMarketCloseAlarm(state);
+  for (const minutes of INTERVALS) {
+    if (state.intervals?.[minutes]?.enabled) {
+      await scheduleAlarm(minutes, state);
+    }
   }
 }
 
@@ -317,6 +398,14 @@ function validMarketCloseTime(value, marketOpenTime) {
 
 function validAlertOffset(value) {
   return Number.isInteger(Number(value)) && Number(value) >= 0 && Number(value) <= 180;
+}
+
+function validMarket(value) {
+  return value === "custom" || Object.prototype.hasOwnProperty.call(MARKETS, value);
+}
+
+function marketForTimes(open, close) {
+  return Object.entries(MARKETS).find(([, preset]) => preset.open === open && preset.close === close)?.[0] || "custom";
 }
 
 function validAlertTone(value) {

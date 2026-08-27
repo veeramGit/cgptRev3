@@ -4,6 +4,7 @@ const DEFAULT_STATE = {
   intervals: {},
   marketOpenTime: "09:15",
   marketCloseTime: "15:30",
+  market: "nse",
   alertTiming: "before",
   alertOffsetSeconds: 15,
   alertTone: "beep"
@@ -30,6 +31,9 @@ function getState() {
     resolve({ ...DEFAULT_STATE, ...state, intervals: state.intervals || {},
       marketOpenTime: validMarketOpenTime(state.marketOpenTime) ? state.marketOpenTime : "09:15",
       marketCloseTime: validMarketCloseTime(state.marketCloseTime, state.marketOpenTime) ? state.marketCloseTime : "15:30",
+      market: validMarket(state.market)
+        ? state.market
+        : marketForTimes(state.marketOpenTime, state.marketCloseTime),
       alertTiming: state.alertTiming === "after" ? "after" : "before",
       alertOffsetSeconds: validAlertOffset(state.alertOffsetSeconds) ? Number(state.alertOffsetSeconds) : 15,
       alertTone: validAlertTone(state.alertTone) ? state.alertTone : "beep" });
@@ -45,11 +49,15 @@ async function refresh() {
   });
   const marketOpenInput = document.getElementById("market-open-time");
   const marketCloseInput = document.getElementById("market-close-time");
+  const marketSelect = document.getElementById("market-select");
   if (document.activeElement !== marketOpenInput) marketOpenInput.value = state.marketOpenTime;
   if (document.activeElement !== marketCloseInput) marketCloseInput.value = state.marketCloseTime;
+  if (document.activeElement !== marketSelect) marketSelect.value = state.market;
   if (!alertTimingDirty) {
     document.querySelector(`input[name="alert-timing"][value="${state.alertTiming}"]`).checked = true;
   }
+  document.getElementById("alert-timing-heading").textContent =
+    `Alert Time: ${state.alertOffsetSeconds} Secs ${capitalize(state.alertTiming)}`;
   const offsetInput = document.getElementById("alert-offset-seconds");
   if (!alertTimingDirty && document.activeElement !== offsetInput) {
     offsetInput.value = state.alertOffsetSeconds;
@@ -58,6 +66,8 @@ async function refresh() {
   if (!alertToneDirty) {
     document.querySelector(`input[name="alert-tone"][value="${state.alertTone}"]`).checked = true;
   }
+  document.getElementById("alert-sound-heading").textContent =
+    `Alert Sound: ${capitalize(state.alertTone)}`;
   document.getElementById("save-alert-tone").disabled = !alertToneDirty;
   for (const minutes of intervals) {
     const item = state.intervals[minutes];
@@ -119,6 +129,7 @@ function formatCountdown(milliseconds) {
   const seconds = Math.max(0, Math.floor(milliseconds / 1000));
   return `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
 }
+function capitalize(value) { return value.charAt(0).toUpperCase() + value.slice(1); }
 function marketOpenTimestamp(value) {
   const [hours, minutes] = (validMarketOpenTime(value) ? value : "09:15").split(":").map(Number);
   const open = new Date(); open.setHours(hours, minutes, 0, 0); return open.getTime();
@@ -126,6 +137,17 @@ function marketOpenTimestamp(value) {
 function validMarketOpenTime(value) { return /^([01]\d|2[0-3]):[0-5]\d$/.test(value || ""); }
 function validMarketCloseTime(value, marketOpenTime) {
   return validMarketOpenTime(value) && validMarketOpenTime(marketOpenTime) && value > marketOpenTime;
+}
+function validMarket(value) {
+  return ["nse", "nikkei", "kospi", "ftse", "dax", "sp500", "dow", "nasdaq", "gold", "bitcoin", "custom"].includes(value);
+}
+function marketForTimes(open, close) {
+  const presets = {
+    "09:15-15:30": "nse", "09:00-15:30": "nikkei", "08:00-16:30": "ftse",
+    "09:00-17:30": "dax", "09:30-16:00": "sp500", "08:20-13:30": "gold",
+    "00:00-23:59": "bitcoin"
+  };
+  return presets[`${open}-${close}`] || "custom";
 }
 function validAlertOffset(value) { return Number.isInteger(Number(value)) && Number(value) >= 0 && Number(value) <= 180; }
 function validAlertTone(value) { return ["beep", "double", "chime"].includes(value); }
@@ -164,6 +186,7 @@ document.getElementById("start").addEventListener("click", async () => {
   const enabled = Object.fromEntries(intervals.map(minutes => [minutes, document.getElementById(`timer-${minutes}`).checked]));
   await send({ type: "start", enabled, marketOpenTime: document.getElementById("market-open-time").value,
     marketCloseTime: document.getElementById("market-close-time").value,
+    market: document.getElementById("market-select").value,
     alertTiming: document.querySelector('input[name="alert-timing"]:checked').value,
     alertOffsetSeconds: document.getElementById("alert-offset-seconds").value,
     alertTone: document.querySelector('input[name="alert-tone"]:checked').value });
@@ -179,6 +202,16 @@ document.querySelectorAll("#market-open-time, #market-close-time").forEach(input
   });
   refresh();
 }));
+document.getElementById("market-select").addEventListener("change", async event => {
+  const response = await send({ type: "setMarket", market: event.target.value });
+  const state = response?.timers;
+  if (state && validMarketOpenTime(state.marketOpenTime) &&
+    validMarketCloseTime(state.marketCloseTime, state.marketOpenTime)) {
+    document.getElementById("market-open-time").value = state.marketOpenTime;
+    document.getElementById("market-close-time").value = state.marketCloseTime;
+  }
+  await refresh();
+});
 async function saveAlertTiming() {
   const response = await send({ type: "setAlertTiming", alertTiming: document.querySelector('input[name="alert-timing"]:checked').value,
     alertOffsetSeconds: document.getElementById("alert-offset-seconds").value });

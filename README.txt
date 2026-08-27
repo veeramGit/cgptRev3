@@ -6,6 +6,7 @@ This is the Chrome-extension equivalent of the supplied GTK Python program.
 FEATURES
 - 1-minute, 3-minute, 5-minute, 15-minute and 1-hour timers
 - Editable market opening time (defaults to 09:15); alert boundaries align to it
+- Market selector with NSE, Nikkei, KOSPI, FTSE, DAX, S&P 500, Dow Jones, Nasdaq, Gold, and Bitcoin session presets; changing the preset restarts enabled timers
 - Choose a shared alert offset before or after candle close; select 15, 30, or 60 seconds from the dropdown or enter another value
 - Expand or collapse the alert timing and alert sound settings as needed
 - Enable/disable intervals independently

@@ -9,10 +9,26 @@
   <main>
     <header class="app-header">
       <img src="icon128.png" alt="NSE Timer logo">
-      <div>
+      <div class="app-title">
         <h1>NSE Timer</h1>
-        <h3>Version r1.3</h3>
+        <h3>Version r1.4</h3>
       </div>
+      <label class="market-selector" for="market-select">
+        <span>Market</span>
+        <select id="market-select" aria-label="Market setting">
+          <option value="nse">NSE</option>
+          <option value="nikkei">Nikkei</option>
+          <option value="kospi">KOSPI</option>
+          <option value="ftse">FTSE</option>
+          <option value="dax">DAX</option>
+          <option value="sp500">S&amp;P 500</option>
+          <option value="dow">Dow Jones</option>
+          <option value="nasdaq">Nasdaq</option>
+          <option value="gold">Gold</option>
+          <option value="bitcoin">Bitcoin</option>
+          <option value="custom">Custom</option>
+        </select>
+      </label>
     </header>
 
     <div class="actual-time" align="right">Current time: <time id="actual-time" style="color: darkblue;">--:--:--</time></div>
@@ -27,7 +43,7 @@
     </div>
 
     <details class="settings-panel alert-settings">
-      <summary>Alert timing</summary>
+      <summary id="alert-timing-heading">Alert Time</summary>
       <div class="alert-line">
         <span class="alert-label">Alert</span>
         <label><input type="radio" name="alert-timing" value="before" checked> Before</label>
@@ -47,7 +63,7 @@
     </details>
 
     <details class="settings-panel audio-settings">
-      <summary>Alert sound</summary>
+      <summary id="alert-sound-heading">Alert Sound</summary>
       <div class="audio-line">
         <span class="audio-label">Sound</span>
         <span class="tone-option">
