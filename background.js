@@ -7,14 +7,14 @@ const DEFAULT_ALERT_TONE = "beep";
 const DEFAULT_MARKET = "nse";
 const MARKETS = {
   nse: { open: "09:15", close: "15:30" },
-  nikkei: { open: "09:00", close: "15:30" },
-  kospi: { open: "09:00", close: "15:30" },
-  ftse: { open: "08:00", close: "16:30" },
-  dax: { open: "09:00", close: "17:30" },
-  sp500: { open: "09:30", close: "16:00" },
-  dow: { open: "09:30", close: "16:00" },
-  nasdaq: { open: "09:30", close: "16:00" },
-  gold: { open: "08:20", close: "13:30" },
+  nikkei: { open: "05:30", close: "12:00" },
+  kospi: { open: "05:30", close: "12:00" },
+  ftse: { open: "13:30", close: "22:00" },
+  dax: { open: "13:30", close: "23:00" },
+  sp500: { open: "20:00", close: "02:30" },
+  dow: { open: "20:00", close: "02:30" },
+  nasdaq: { open: "20:00", close: "02:30" },
+  gold: { open: "03:30", close: "02:30" },
   bitcoin: { open: "00:00", close: "23:59" }
 };
 let activeTonePlayback;
@@ -57,8 +57,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       const state = await getState();
       state.intervals = state.intervals || {};
       state.intervals[message.minutes] = {
-        enabled: message.enabled,
-        startTime: message.enabled ? Date.now() : null
+        enabled: message.enabled
       };
 
       if (!message.enabled) {
@@ -233,13 +232,11 @@ function alarmName(minutes) {
 async function startAll(enabled, marketOpenTime, marketCloseTime, alertTiming, alertOffsetSeconds, alertTone, market) {
   await stopAll(false);
 
-  const now = Date.now();
   const intervals = {};
 
   for (const minutes of INTERVALS) {
     intervals[minutes] = {
-      enabled: !!enabled[minutes],
-      startTime: enabled[minutes] ? now : null
+      enabled: !!enabled[minutes]
     };
   }
 
@@ -311,10 +308,9 @@ async function recreateAlarms(state) {
 async function restartAllTimers(state) {
   await stopAll(false);
 
-  const now = Date.now();
   for (const minutes of INTERVALS) {
     const item = state.intervals?.[minutes];
-    if (item?.enabled) item.startTime = now;
+    // Keep existing enabled state, just restart alarms based on market time
   }
   state.lastAlerts = {};
   state.startBlockedReason = "";
@@ -338,7 +334,7 @@ async function restartAllTimers(state) {
 async function scheduleAlarm(minutes, state) {
   const periodMs = minutes * 60 * 1000;
   const now = Date.now();
-  const openTime = marketOpenTimestamp(state.marketOpenTime);
+  const openTime = marketOpenTimestamp(state.marketOpenTime, state.marketCloseTime);
   const offsetMs = state.alertOffsetSeconds * 1000;
   const adjustment = state.alertTiming === "before" ? offsetMs : -offsetMs;
   const intervalsElapsed = Math.max(
@@ -348,33 +344,65 @@ async function scheduleAlarm(minutes, state) {
   const nextMs = openTime + intervalsElapsed * periodMs +
     (state.alertTiming === "after" ? offsetMs : -offsetMs) - now;
 
-  if (now + nextMs >= marketCloseTimestamp(state.marketCloseTime)) return;
+  if (now + nextMs >= marketCloseTimestamp(state.marketCloseTime, state.marketOpenTime)) return;
 
   await chrome.alarms.create(alarmName(minutes), {
     delayInMinutes: Math.max(nextMs / 60000, 0.5)
   });
 }
 
-function marketOpenTimestamp(marketOpenTime) {
-  const [hours, minutes] = (validMarketOpenTime(marketOpenTime)
-    ? marketOpenTime
-    : DEFAULT_MARKET_OPEN_TIME).split(":").map(Number);
+function marketOpenTimestamp(marketOpenTime, marketCloseTime) {
+  const openValid = validMarketOpenTime(marketOpenTime) ? marketOpenTime : DEFAULT_MARKET_OPEN_TIME;
+  const closeValid = validMarketOpenTime(marketCloseTime) ? marketCloseTime : DEFAULT_MARKET_CLOSE_TIME;
+  
+  const [hours, minutes] = openValid.split(":").map(Number);
+  const [closeHours, closeMins] = closeValid.split(":").map(Number);
+  
   const open = new Date();
   open.setHours(hours, minutes, 0, 0);
+  
+  const close = new Date();
+  close.setHours(closeHours, closeMins, 0, 0);
+  
+  const closeInMinutes = closeHours * 60 + closeMins;
+  const openInMinutes = hours * 60 + minutes;
+  
+  // If close time is before open time (numerically), close is next day
+  if (closeInMinutes < openInMinutes) {
+    close.setDate(close.getDate() + 1);
+  }
+  
+  // If we're past the market close time, use tomorrow's market open
+  if (Date.now() >= close.getTime()) {
+    open.setDate(open.getDate() + 1);
+  }
+  
   return open.getTime();
 }
 
-function marketCloseTimestamp(marketCloseTime) {
-  const [hours, minutes] = (validMarketOpenTime(marketCloseTime)
-    ? marketCloseTime
-    : DEFAULT_MARKET_CLOSE_TIME).split(":").map(Number);
+function marketCloseTimestamp(marketCloseTime, marketOpenTime) {
+  const closeValid = validMarketOpenTime(marketCloseTime) ? marketCloseTime : DEFAULT_MARKET_CLOSE_TIME;
+  const openValid = validMarketOpenTime(marketOpenTime) ? marketOpenTime : DEFAULT_MARKET_OPEN_TIME;
+  
+  const [closeHours, closeMins] = closeValid.split(":").map(Number);
+  const [openHours, openMins] = openValid.split(":").map(Number);
+  
   const close = new Date();
-  close.setHours(hours, minutes, 0, 0);
+  close.setHours(closeHours, closeMins, 0, 0);
+  
+  const closeInMinutes = closeHours * 60 + closeMins;
+  const openInMinutes = openHours * 60 + openMins;
+  
+  // If close time is before open time (numerically), it's a next-day close
+  if (closeInMinutes < openInMinutes) {
+    close.setDate(close.getDate() + 1);
+  }
+  
   return close.getTime();
 }
 
 function isMarketClosed(state) {
-  return Date.now() >= marketCloseTimestamp(state.marketCloseTime);
+  return Date.now() >= marketCloseTimestamp(state.marketCloseTime, state.marketOpenTime);
 }
 
 function marketEndNote(state) {
@@ -384,7 +412,7 @@ function marketEndNote(state) {
 async function scheduleMarketCloseAlarm(state) {
   await chrome.alarms.clear("market-close");
   await chrome.alarms.create("market-close", {
-    when: marketCloseTimestamp(state.marketCloseTime)
+    when: marketCloseTimestamp(state.marketCloseTime, state.marketOpenTime)
   });
 }
 
@@ -393,7 +421,15 @@ function validMarketOpenTime(value) {
 }
 
 function validMarketCloseTime(value, marketOpenTime) {
-  return validMarketOpenTime(value) && validMarketOpenTime(marketOpenTime) && value > marketOpenTime;
+  if (!validMarketOpenTime(value) || !validMarketOpenTime(marketOpenTime)) return false;
+  
+  const [openHours, openMins] = marketOpenTime.split(":").map(Number);
+  const [closeHours, closeMins] = value.split(":").map(Number);
+  const openInMinutes = openHours * 60 + openMins;
+  const closeInMinutes = closeHours * 60 + closeMins;
+  
+  // Allow same-day (close > open) or next-day (close < open) closes
+  return closeInMinutes !== openInMinutes;
 }
 
 function validAlertOffset(value) {

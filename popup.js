@@ -99,7 +99,7 @@ async function refresh() {
 }
 
 function getTimerRemaining(state, minutes) {
-  const now = Date.now(), openTime = marketOpenTimestamp(state.marketOpenTime);
+  const now = Date.now(), openTime = marketOpenTimestamp(state.marketOpenTime, state.marketCloseTime);
   const periodMs = minutes * 60 * 1000;
   const candleNumber = Math.max(1, Math.floor((now - openTime) / periodMs) + 1);
   return openTime + candleNumber * periodMs - now;
@@ -111,7 +111,7 @@ function formatAlertRemaining(state, minutes) {
   if (lastAlertAt && Date.now() - lastAlertAt >= 0 && Date.now() - lastAlertAt < 1500) {
     return "00:00";
   }
-  const now = Date.now(), openTime = marketOpenTimestamp(state.marketOpenTime);
+  const now = Date.now(), openTime = marketOpenTimestamp(state.marketOpenTime, state.marketCloseTime);
   const periodMs = minutes * 60 * 1000, offsetMs = state.alertOffsetSeconds * 1000;
   const adjustment = state.alertTiming === "before" ? offsetMs : -offsetMs;
   const candleNumber = Math.max(1, Math.floor((now + adjustment - openTime) / periodMs) + 1);
@@ -130,21 +130,50 @@ function formatCountdown(milliseconds) {
   return `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
 }
 function capitalize(value) { return value.charAt(0).toUpperCase() + value.slice(1); }
-function marketOpenTimestamp(value) {
-  const [hours, minutes] = (validMarketOpenTime(value) ? value : "09:15").split(":").map(Number);
-  const open = new Date(); open.setHours(hours, minutes, 0, 0); return open.getTime();
+function marketOpenTimestamp(marketOpenTime, marketCloseTime) {
+  const validOpen = validMarketOpenTime(marketOpenTime) ? marketOpenTime : "09:15";
+  const validClose = validMarketOpenTime(marketCloseTime) ? marketCloseTime : "15:30";
+  
+  const [hours, minutes] = validOpen.split(":").map(Number);
+  const [closeHours, closeMins] = validClose.split(":").map(Number);
+  
+  const open = new Date(); open.setHours(hours, minutes, 0, 0);
+  const close = new Date(); close.setHours(closeHours, closeMins, 0, 0);
+  
+  const closeInMinutes = closeHours * 60 + closeMins;
+  const openInMinutes = hours * 60 + minutes;
+  
+  // If close time is before open time (numerically), close is next day
+  if (closeInMinutes < openInMinutes) {
+    close.setDate(close.getDate() + 1);
+  }
+  
+  // If we're past the market close time, use tomorrow's market open
+  if (Date.now() >= close.getTime()) {
+    open.setDate(open.getDate() + 1);
+  }
+  
+  return open.getTime();
 }
 function validMarketOpenTime(value) { return /^([01]\d|2[0-3]):[0-5]\d$/.test(value || ""); }
 function validMarketCloseTime(value, marketOpenTime) {
-  return validMarketOpenTime(value) && validMarketOpenTime(marketOpenTime) && value > marketOpenTime;
+  if (!validMarketOpenTime(value) || !validMarketOpenTime(marketOpenTime)) return false;
+  
+  const [openHours, openMins] = marketOpenTime.split(":").map(Number);
+  const [closeHours, closeMins] = value.split(":").map(Number);
+  const openInMinutes = openHours * 60 + openMins;
+  const closeInMinutes = closeHours * 60 + closeMins;
+  
+  // Allow same-day (close > open) or next-day (close < open) closes
+  return closeInMinutes !== openInMinutes;
 }
 function validMarket(value) {
   return ["nse", "nikkei", "kospi", "ftse", "dax", "sp500", "dow", "nasdaq", "gold", "bitcoin", "custom"].includes(value);
 }
 function marketForTimes(open, close) {
   const presets = {
-    "09:15-15:30": "nse", "09:00-15:30": "nikkei", "08:00-16:30": "ftse",
-    "09:00-17:30": "dax", "09:30-16:00": "sp500", "08:20-13:30": "gold",
+    "09:15-15:30": "nse", "05:30-12:00": "nikkei", "05:30-12:00": "kospi", "13:30-22:00": "ftse",
+    "13:30-23:00": "dax", "20:00-02:30": "sp500", "20:00-02:30": "dow", "20:00-02:30": "nasdaq", "03:30-02:30": "gold",
     "00:00-23:59": "bitcoin"
   };
   return presets[`${open}-${close}`] || "custom";
