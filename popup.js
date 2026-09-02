@@ -260,7 +260,14 @@ function markAlertTimingDirty() {
 document.querySelectorAll('input[name="alert-timing"]').forEach(input => input.addEventListener("change", markAlertTimingDirty));
 const alertOffsetInput = document.getElementById("alert-offset-seconds");
 alertOffsetInput.addEventListener("input", () => {
-  if (Number(alertOffsetInput.value) > 180) alertOffsetInput.value = 180;
+  const numericValue = Number(alertOffsetInput.value);
+  if (!Number.isFinite(numericValue)) {
+    alertOffsetInput.value = 0;
+  } else if (numericValue > 180) {
+    alertOffsetInput.value = 180;
+  } else if (numericValue < 0) {
+    alertOffsetInput.value = 0;
+  }
   markAlertTimingDirty();
 });
 document.querySelectorAll(".alert-presets button").forEach(button => button.addEventListener("click", () => {
