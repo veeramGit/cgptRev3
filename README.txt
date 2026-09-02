@@ -1,5 +1,5 @@
 MULTI-INTERVAL TRADING TIMER - CHROME EXTENSION
-Release label: NSE Time V2
+Release label: NSE Timer V1.4
 
 This is the Chrome-extension equivalent of the supplied GTK Python program.
 

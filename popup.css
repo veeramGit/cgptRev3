@@ -45,6 +45,12 @@ h3 {
   font-size: 11px;
 }
 
+.app-header p {
+  margin: 2px 0 0;
+  color: #667585;
+  font-size: 11px;
+}
+
 .market-selector {
   display: inline-flex;
   flex-direction: column;
