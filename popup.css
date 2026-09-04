@@ -51,6 +51,46 @@ h3 {
   font-size: 11px;
 }
 
+.access-mode {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0 0 8px;
+  color: #667585;
+  font-size: 10px;
+}
+
+.access-mode span {
+  margin-right: auto;
+  font-weight: bold;
+}
+
+.access-mode button {
+  padding: 3px 6px;
+  border: 1px solid #b7c9dc;
+  border-radius: 3px;
+  background: #f2f7fc;
+  color: #145da0;
+  font-size: 10px;
+  font-weight: bold;
+}
+
+#go-pro {
+  border-color: #2d8a4a;
+  background: #2d9b50;
+  color: #fff;
+}
+
+#go-pro:disabled {
+  border-color: #b7c9dc;
+  background: #eef3f7;
+  color: #667585;
+}
+
+.feature-locked {
+  opacity: 0.55;
+}
+
 .market-selector {
   display: inline-flex;
   flex-direction: column;

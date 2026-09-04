@@ -9,8 +9,10 @@ const DEFAULT_STATE = {
   alertOffsetSeconds: 15,
   alertTone: "beep"
 };
+const FREE_INTERVALS = [5, 15];
 let alertTimingDirty = false;
 let alertToneDirty = false;
+let extPayStatusChecked = false;
 let previewAudioContext;
 const PREVIEW_TONES = {
   beep: [{ frequency: 880, duration: 0.3, delay: 0, wave: "sine" }],
@@ -29,6 +31,7 @@ function getState() {
   return new Promise(resolve => chrome.storage.local.get(["timers"], result => {
     const state = result.timers || DEFAULT_STATE;
     resolve({ ...DEFAULT_STATE, ...state, intervals: state.intervals || {},
+      paidMode: state.paidMode === true,
       marketOpenTime: validMarketOpenTime(state.marketOpenTime) ? state.marketOpenTime : "09:15",
       marketCloseTime: validMarketCloseTime(state.marketCloseTime, state.marketOpenTime) ? state.marketCloseTime : "15:30",
       market: validMarket(state.market)
@@ -42,7 +45,28 @@ function getState() {
 function send(message) { return chrome.runtime.sendMessage(message); }
 
 async function refresh() {
-  const state = await getState();
+  let state = await getState();
+  if (!extPayStatusChecked) {
+    const response = await send({ type: "getExtPayStatus" });
+    extPayStatusChecked = true;
+    state = response?.timers || state;
+  }
+  const isPaid = state.paidMode === true;
+  document.getElementById("test-paid-mode").textContent = isPaid ? "Paid mode" : "Free mode";
+  document.getElementById("test-paid-mode").setAttribute("aria-pressed", String(isPaid));
+  document.getElementById("go-pro").textContent = state.extPayPaid ? "Pro active" : "Go Pro";
+  document.getElementById("go-pro").disabled = state.extPayPaid === true;
+  document.querySelectorAll(".timer-row").forEach(row => {
+    const minutes = Number(row.dataset.minutes);
+    const freeRestricted = !isPaid && !FREE_INTERVALS.includes(minutes);
+    const checkbox = row.querySelector('input[type="checkbox"]');
+    checkbox.disabled = freeRestricted;
+    row.classList.toggle("feature-locked", freeRestricted);
+  });
+  const alertControls = document.querySelectorAll(".alert-settings input, .alert-settings button");
+  const toneControls = document.querySelectorAll(".audio-settings input, .audio-settings button");
+  alertControls.forEach(control => { control.disabled = !isPaid; });
+  toneControls.forEach(control => { control.disabled = !isPaid; });
   document.getElementById("actual-time").dateTime = new Date().toISOString();
   document.getElementById("actual-time").textContent = new Date().toLocaleTimeString([], {
     hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true
@@ -211,6 +235,15 @@ async function playPreviewTone(toneName) {
 document.querySelectorAll('input[type="checkbox"]').forEach(input => input.addEventListener("change", async () => {
   await send({ type: "setEnabled", minutes: Number(input.id.replace("timer-", "")), enabled: input.checked }); refresh();
 }));
+document.getElementById("test-paid-mode").addEventListener("click", async () => {
+  await send({ type: "setTestPaidMode", paidMode: document.getElementById("test-paid-mode").getAttribute("aria-pressed") !== "true" });
+  await refresh();
+});
+document.getElementById("go-pro").addEventListener("click", async () => {
+  const response = await send({ type: "openExtPayPayment" });
+  document.getElementById("timer-note").textContent = response?.message ||
+    response?.error || "Checkout opened in a new tab.";
+});
 document.getElementById("start").addEventListener("click", async () => {
   const enabled = Object.fromEntries(intervals.map(minutes => [minutes, document.getElementById(`timer-${minutes}`).checked]));
   await send({ type: "start", enabled, marketOpenTime: document.getElementById("market-open-time").value,

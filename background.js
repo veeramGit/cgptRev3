@@ -5,6 +5,23 @@ const DEFAULT_ALERT_TIMING = "before";
 const DEFAULT_ALERT_OFFSET_SECONDS = 15;
 const DEFAULT_ALERT_TONE = "beep";
 const DEFAULT_MARKET = "nse";
+const FREE_INTERVALS = [5, 15];
+const EXTPAY_APP_ID = "multi-interval-trading-timer";
+importScripts("ExtPay.js");
+const extpay = ExtPay(EXTPAY_APP_ID);
+extpay.startBackground();
+extpay.onPaid.addListener(async user => {
+  const state = await getState();
+  state.extPayPaid = Boolean(user?.paidAt);
+  state.paidMode = state.testPaidMode === true || state.extPayPaid;
+  await chrome.storage.local.set({ timers: state });
+  await chrome.notifications.create("extpay-paid", {
+    type: "basic",
+    iconUrl: "icon128.png",
+    title: "Pro mode activated",
+    message: "Reopen the extension popup to use all Pro features."
+  });
+});
 const MARKETS = {
   nse: { open: "09:15", close: "15:30" },
   nikkei: { open: "05:30", close: "12:00" },
@@ -55,6 +72,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   (async () => {
     if (message.type === "setEnabled") {
       const state = await getState();
+      if (!state.paidMode && !FREE_INTERVALS.includes(Number(message.minutes))) {
+        sendResponse({ ok: false, error: "This interval requires Paid mode.", timers: state });
+        return;
+      }
       state.intervals = state.intervals || {};
       state.intervals[message.minutes] = {
         enabled: message.enabled
@@ -116,6 +137,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     if (message.type === "setAlertTiming") {
       const state = await getState();
+      if (!state.paidMode) {
+        sendResponse({ ok: false, error: "Alert timing requires Paid mode.", timers: state });
+        return;
+      }
       const alertTiming = message.alertTiming === "after" ? "after" : DEFAULT_ALERT_TIMING;
       const alertOffsetSeconds = validAlertOffset(message.alertOffsetSeconds)
         ? Number(message.alertOffsetSeconds) : DEFAULT_ALERT_OFFSET_SECONDS;
@@ -133,6 +158,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     if (message.type === "setAlertTone") {
       const state = await getState();
+      if (!state.paidMode) {
+        sendResponse({ ok: false, error: "Alert sounds require Paid mode.", timers: state });
+        return;
+      }
       state.alertTone = validAlertTone(message.alertTone)
         ? message.alertTone
         : DEFAULT_ALERT_TONE;
@@ -150,6 +179,49 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     if (message.type === "stop") {
       await stopAll();
+    }
+
+    if (message.type === "setTestPaidMode") {
+      const state = await getState();
+      state.testPaidMode = message.paidMode === true;
+      state.paidMode = state.testPaidMode || state.extPayPaid === true;
+      if (!state.paidMode) {
+        state.alertTiming = DEFAULT_ALERT_TIMING;
+        state.alertOffsetSeconds = DEFAULT_ALERT_OFFSET_SECONDS;
+        state.alertTone = DEFAULT_ALERT_TONE;
+        for (const minutes of Object.keys(state.intervals || {})) {
+          if (!FREE_INTERVALS.includes(Number(minutes))) state.intervals[minutes].enabled = false;
+        }
+      }
+      await chrome.storage.local.set({ timers: state });
+      if (state.running) await restartAllTimers(state);
+    }
+
+    if (message.type === "getExtPayStatus") {
+      try {
+        const user = await extpay.getUser();
+        const state = await getState();
+        state.extPayPaid = Boolean(user?.paidAt);
+        state.paidMode = state.testPaidMode === true || state.extPayPaid;
+        await chrome.storage.local.set({ timers: state });
+        sendResponse({ ok: true, timers: state, extPayConfigured: true });
+        return;
+      } catch (error) {
+        console.warn("ExtensionPay status unavailable:", error);
+        sendResponse({ ok: false, timers: await getState(), extPayConfigured: true });
+        return;
+      }
+    }
+
+    if (message.type === "openExtPayPayment") {
+      try {
+        await extpay.openPaymentPage();
+        sendResponse({ ok: true, message: "Checkout opened in a new tab." });
+      } catch (error) {
+        console.warn("ExtensionPay checkout unavailable:", error);
+        sendResponse({ ok: false, error: "ExtensionPay checkout is unavailable." });
+      }
+      return;
     }
 
     sendResponse({ ok: true, timers: await getState() });
@@ -205,7 +277,11 @@ async function getState() {
   };
   return {
     ...state,
-    intervals: state.intervals || {},
+    paidMode: state.paidMode === true,
+    intervals: Object.fromEntries(Object.entries(state.intervals || {}).map(([minutes, item]) => [minutes, {
+      ...item,
+      enabled: state.paidMode === true || FREE_INTERVALS.includes(Number(minutes)) ? !!item.enabled : false
+    }])),
     lastAlerts: state.lastAlerts || {},
     startBlockedReason: typeof state.startBlockedReason === "string" ? state.startBlockedReason : "",
     marketOpenTime: validMarketOpenTime(state.marketOpenTime)
@@ -217,10 +293,10 @@ async function getState() {
     market: validMarket(state.market)
       ? state.market
       : marketForTimes(state.marketOpenTime, state.marketCloseTime),
-    alertTiming: state.alertTiming === "after" ? "after" : DEFAULT_ALERT_TIMING,
-    alertOffsetSeconds: validAlertOffset(state.alertOffsetSeconds)
+    alertTiming: state.paidMode === true && state.alertTiming === "after" ? "after" : DEFAULT_ALERT_TIMING,
+    alertOffsetSeconds: state.paidMode === true && validAlertOffset(state.alertOffsetSeconds)
       ? Number(state.alertOffsetSeconds) : DEFAULT_ALERT_OFFSET_SECONDS,
-    alertTone: validAlertTone(state.alertTone)
+    alertTone: state.paidMode === true && validAlertTone(state.alertTone)
       ? state.alertTone : DEFAULT_ALERT_TONE
   };
 }
@@ -232,11 +308,13 @@ function alarmName(minutes) {
 async function startAll(enabled, marketOpenTime, marketCloseTime, alertTiming, alertOffsetSeconds, alertTone, market) {
   await stopAll(false);
 
+  const savedState = await getState();
+  const paidMode = savedState.paidMode === true;
   const intervals = {};
 
   for (const minutes of INTERVALS) {
     intervals[minutes] = {
-      enabled: !!enabled[minutes]
+      enabled: paidMode ? !!enabled[minutes] : FREE_INTERVALS.includes(minutes) && !!enabled[minutes]
     };
   }
 
@@ -252,10 +330,11 @@ async function startAll(enabled, marketOpenTime, marketCloseTime, alertTiming, a
       ? marketCloseTime
       : DEFAULT_MARKET_CLOSE_TIME,
     market: validMarket(market) ? market : DEFAULT_MARKET,
-    alertTiming: alertTiming === "after" ? "after" : DEFAULT_ALERT_TIMING,
-    alertOffsetSeconds: validAlertOffset(alertOffsetSeconds)
+    alertTiming: paidMode && alertTiming === "after" ? "after" : DEFAULT_ALERT_TIMING,
+    alertOffsetSeconds: paidMode && validAlertOffset(alertOffsetSeconds)
       ? Number(alertOffsetSeconds) : DEFAULT_ALERT_OFFSET_SECONDS,
-    alertTone: validAlertTone(alertTone) ? alertTone : DEFAULT_ALERT_TONE
+    alertTone: paidMode && validAlertTone(alertTone) ? alertTone : DEFAULT_ALERT_TONE,
+    paidMode
   };
 
   await chrome.storage.local.set({ timers: state });

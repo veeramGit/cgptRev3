@@ -10,6 +10,16 @@
     "storage",
     "offscreen"
   ],
+  "host_permissions": [
+    "https://extensionpay.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["https://extensionpay.com/*"],
+      "js": ["ExtPay.js"],
+      "run_at": "document_start"
+    }
+  ],
   "action": {
     "default_title": "Multi-Interval Trading Timer",
     "default_popup": "popup.html",
