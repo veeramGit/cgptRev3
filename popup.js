@@ -10,7 +10,7 @@ const DEFAULT_STATE = {
   alertTone: "beep"
 };
 const FREE_INTERVALS = [5, 15];
-const SHOW_TEST_ACCESS = true;
+const SHOW_TEST_ACCESS = false;  // Set to true to enable temporary test access controls in the popup for development/testing.
 let alertTimingDirty = false;
 let alertToneDirty = false;
 let extPayStatusChecked = false;
@@ -178,12 +178,12 @@ async function refresh() {
   }
   const isPaid = state.paidMode === true;
   const testPaidMode = state.testPaidMode === true;
-  document.getElementById("test-paid-mode").textContent = testPaidMode ? "Test Paid" : "Test Free";
-  document.getElementById("test-paid-mode").setAttribute("aria-pressed", String(testPaidMode));
+  document.getElementById("test-paid-mode").checked = testPaidMode;
   document.querySelectorAll(".timer-row").forEach(row => {
     const minutes = Number(row.dataset.minutes);
     const freeRestricted = !isPaid && !FREE_INTERVALS.includes(minutes);
     const checkbox = row.querySelector('input[type="checkbox"]');
+    if (freeRestricted) checkbox.checked = false;
     checkbox.disabled = freeRestricted;
     row.classList.toggle("feature-locked", freeRestricted);
   });
@@ -219,7 +219,8 @@ async function refresh() {
   document.getElementById("save-alert-tone").disabled = !alertToneDirty;
   for (const minutes of intervals) {
     const item = state.intervals[minutes];
-    document.getElementById(`timer-${minutes}`).checked = !!item?.enabled;
+    const freeRestricted = !isPaid && !FREE_INTERVALS.includes(minutes);
+    document.getElementById(`timer-${minutes}`).checked = !freeRestricted && !!item?.enabled;
     const status = document.getElementById(`status-${minutes}`);
     if (!item?.enabled) {
       status.className = "";
@@ -356,21 +357,12 @@ async function playPreviewTone(toneName) {
   }
 }
 
-document.querySelectorAll('input[type="checkbox"]').forEach(input => input.addEventListener("change", async () => {
+document.querySelectorAll('.timer-row input[type="checkbox"]').forEach(input => input.addEventListener("change", async () => {
   await send({ type: "setEnabled", minutes: Number(input.id.replace("timer-", "")), enabled: input.checked }); refresh();
 }));
-document.getElementById("test-paid-mode").addEventListener("click", async () => {
-  await send({ type: "setTestPaidMode", paidMode: document.getElementById("test-paid-mode").getAttribute("aria-pressed") !== "true" });
+document.getElementById("test-paid-mode").addEventListener("change", async event => {
+  await send({ type: "setTestPaidMode", paidMode: event.target.checked });
   await refresh();
-});
-document.getElementById("test-mode-visibility").addEventListener("click", () => {
-  const toggle = document.getElementById("test-paid-mode");
-  const visibility = document.getElementById("test-mode-visibility");
-  const hidden = toggle.hidden;
-  toggle.hidden = !hidden;
-  visibility.textContent = hidden ? "×" : "+";
-  visibility.setAttribute("aria-label", hidden ? "Hide test toggle" : "Show test toggle");
-  visibility.title = hidden ? "Hide test toggle" : "Show test toggle";
 });
 document.getElementById("subscription-toggle").addEventListener("click", async () => {
   if (SHOW_TEST_ACCESS) return;

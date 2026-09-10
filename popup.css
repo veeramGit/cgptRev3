@@ -81,6 +81,9 @@ h3 {
 }
 
 .test-mode-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
   color: #8a5a00;
   font-weight: bold;
 }
@@ -93,22 +96,6 @@ h3 {
 }
 
 .test-controls[hidden] {
-  display: none;
-}
-
-.test-mode-visibility {
-  width: 16px;
-  height: 16px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: #8a5a00;
-  font-size: 14px;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.test-mode-toggle[hidden] {
   display: none;
 }
 
