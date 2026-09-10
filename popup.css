@@ -51,44 +51,162 @@ h3 {
   font-size: 11px;
 }
 
-.access-mode {
+.app-subtitle-row {
   display: flex;
   align-items: center;
-  gap: 5px;
-  margin: 0 0 8px;
+  min-width: 0;
+}
+
+.subscription-summary,
+.test-mode-toggle {
+  padding: 0;
+  border: 0;
+  background: transparent;
   color: #667585;
   font-size: 10px;
+  line-height: 1.1;
+  cursor: pointer;
 }
 
-.access-mode span {
-  margin-right: auto;
-  font-weight: bold;
-}
-
-.access-mode button {
-  padding: 3px 6px;
-  border: 1px solid #b7c9dc;
-  border-radius: 3px;
-  background: #f2f7fc;
+.subscription-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
   color: #145da0;
-  font-size: 10px;
+  font-weight: bold;
+  max-width: 150px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.test-mode-toggle {
+  color: #8a5a00;
   font-weight: bold;
 }
 
-#go-pro {
-  border-color: #2d8a4a;
-  background: #2d9b50;
-  color: #fff;
+.test-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 4px;
 }
 
-#go-pro:disabled {
-  border-color: #b7c9dc;
-  background: #eef3f7;
-  color: #667585;
+.test-controls[hidden] {
+  display: none;
+}
+
+.test-mode-visibility {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #8a5a00;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.test-mode-toggle[hidden] {
+  display: none;
+}
+
+.time-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.subscription-summary:focus-visible,
+.test-mode-toggle:focus-visible,
+.subscription-plan button:focus-visible {
+  outline: 2px solid #1976d2;
+  outline-offset: 2px;
 }
 
 .feature-locked {
   opacity: 0.55;
+}
+
+.subscription-panel {
+  margin: 0 0 8px;
+  padding: 6px 8px;
+  border: 1px solid #d7e1eb;
+  border-radius: 4px;
+  background: #f8fbfe;
+  font-size: 11px;
+}
+
+.subscription-panel[hidden] {
+  display: none;
+}
+
+.subscription-heading-row,
+.subscription-plan {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.subscription-heading-row {
+  margin-bottom: 5px;
+}
+
+.subscription-heading-row h2 {
+  margin: 0;
+  color: #145da0;
+  font-size: 12px;
+}
+
+#subscription-status {
+  color: #667585;
+  font-size: 10px;
+  font-weight: bold;
+}
+
+.subscription-plans {
+  display: grid;
+  gap: 4px;
+}
+
+.subscription-plan {
+  padding-top: 4px;
+  border-top: 1px solid #e1e7ef;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.subscription-plan > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.subscription-plan.active-plan {
+  margin: 0 -4px;
+  padding: 4px;
+  border: 1px solid #6aa77a;
+  border-radius: 3px;
+  background: #eef8f0;
+}
+
+.subscription-plan button {
+  width: 22px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid #2d8a4a;
+  border-radius: 3px;
+  background: #2d9b50;
+  color: #fff;
+  font-size: 10px;
+}
+
+.active-plan button {
+  border-color: #a34a4a;
+  background: #b75555;
 }
 
 .market-selector {
@@ -110,9 +228,10 @@ h3 {
 }
 
 .actual-time {
-  margin: 0 0 8px;
+  margin: 0 0 8px auto;
   font-size: 12px;
   font-weight: bold;
+  text-align: right;
 }
 
 .actual-time time {

@@ -10,9 +10,14 @@ const DEFAULT_STATE = {
   alertTone: "beep"
 };
 const FREE_INTERVALS = [5, 15];
+const SHOW_TEST_ACCESS = true;
 let alertTimingDirty = false;
 let alertToneDirty = false;
 let extPayStatusChecked = false;
+let subscriptionPlansLoaded = false;
+let subscriptionRefreshInProgress = false;
+let subscriptionRefreshTimer;
+let subscriptionHideTimer;
 let previewAudioContext;
 const PREVIEW_TONES = {
   beep: [{ frequency: 880, duration: 0.3, delay: 0, wave: "sine" }],
@@ -44,18 +49,137 @@ function getState() {
 }
 function send(message) { return chrome.runtime.sendMessage(message); }
 
+function formatPlanPrice(plan) {
+  const amountCents = plan.unitAmountCents ?? plan.unit_amount;
+  const amount = amountCents != null
+    ? Number(amountCents) / 100
+    : plan.price ?? plan.amount;
+  if (amount == null) return "View plan";
+  const currency = String(plan.currency || plan.currency_code || "USD").toUpperCase();
+  const interval = plan.interval || plan.billing_interval || plan.billingInterval || "";
+  const intervalCount = plan.intervalCount && plan.intervalCount !== 1
+    ? `${plan.intervalCount} ` : "";
+  const intervalLabel = interval === "once" ? "lifetime" : `${intervalCount}${interval}`;
+  return `${currency} ${amount}${intervalLabel ? ` / ${intervalLabel}` : ""}`;
+}
+
+function formatPlanName(plan) {
+  if (plan.name || plan.display_name || plan.nickname) {
+    return plan.name || plan.display_name || plan.nickname;
+  }
+  if (plan.interval === "once") return "Lifetime";
+  if (plan.interval === "year") return "Yearly";
+  if (plan.interval === "month") return "Monthly";
+  return "Plan";
+}
+
+function isActivePlan(plan, activePlan) {
+  if (!activePlan) return false;
+  const planNickname = String(plan.nickname || plan.plan_nickname || "").trim().toLowerCase();
+  const activeNickname = String(activePlan.nickname || activePlan.plan_nickname || "").trim().toLowerCase();
+  if (planNickname && activeNickname) return planNickname === activeNickname;
+
+  const planAmount = Number(plan.unitAmountCents ?? plan.unit_amount ?? plan.price * 100);
+  const activeAmount = Number(activePlan.unitAmountCents ?? activePlan.unit_amount ?? activePlan.price * 100);
+  const planCurrency = String(plan.currency || plan.currency_code || "").toLowerCase();
+  const activeCurrency = String(activePlan.currency || activePlan.currency_code || "").toLowerCase();
+  const planInterval = String(plan.interval || "").toLowerCase();
+  const activeInterval = String(activePlan.interval || "").toLowerCase();
+  const planCount = plan.intervalCount == null ? null : Number(plan.intervalCount);
+  const activeCount = activePlan.intervalCount == null ? null : Number(activePlan.intervalCount);
+
+  return Number.isFinite(planAmount) && planAmount === activeAmount &&
+    planCurrency === activeCurrency && planInterval === activeInterval &&
+    planCount === activeCount;
+}
+
+function planAmountCents(plan) {
+  const amount = plan.unitAmountCents ?? plan.unit_amount ??
+    (plan.price == null ? null : Number(plan.price) * 100);
+  return amount == null ? Number.POSITIVE_INFINITY : Number(amount);
+}
+
+async function refreshSubscription() {
+  if (SHOW_TEST_ACCESS) return;
+  if (subscriptionRefreshInProgress) return;
+  subscriptionRefreshInProgress = true;
+  try {
+    const response = await send({ type: "getExtPayPlans" });
+    renderSubscriptionPlans(response);
+    subscriptionPlansLoaded = true;
+    extPayStatusChecked = true;
+    return response?.timers;
+  } finally {
+    subscriptionRefreshInProgress = false;
+  }
+}
+
+function renderSubscriptionPlans(response) {
+  const status = document.getElementById("subscription-status");
+  const summary = document.getElementById("subscription-summary");
+  const plansElement = document.getElementById("subscription-plans");
+  if (!response?.ok) {
+    status.textContent = "Unavailable";
+    summary.textContent = "Unavailable";
+    plansElement.textContent = response?.error || "Plans unavailable.";
+    return;
+  }
+  const activePlan = response.user?.plan;
+  const activeName = activePlan ? formatPlanName(activePlan) : "Free";
+  summary.textContent = activeName;
+  status.textContent = response.user?.paid
+    ? `Pro active${response.user.subscriptionStatus ? ` (${response.user.subscriptionStatus})` : ""}`
+    : "Free plan";
+  plansElement.replaceChildren();
+  if (!response.plans?.length) {
+    plansElement.textContent = "No plans available.";
+    return;
+  }
+  const plans = response.plans.slice().sort((left, right) =>
+    planAmountCents(left) - planAmountCents(right)).slice(0, 3);
+  const activeAmount = activePlan ? planAmountCents(activePlan) : null;
+  for (const plan of plans) {
+    const row = document.createElement("div");
+    const active = isActivePlan(plan, activePlan);
+    const isHigherPlan = activeAmount != null && planAmountCents(plan) > activeAmount;
+    row.className = active ? "subscription-plan active-plan" : "subscription-plan";
+    const details = document.createElement("span");
+    details.textContent = `${formatPlanName(plan)} - ${formatPlanPrice(plan)}${active ? " (Active)" : ""}`;
+    row.append(details);
+    if (active || !activePlan || isHigherPlan) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = active ? "×" : "↑";
+      button.title = active ? "Manage or cancel subscription" : "Upgrade plan";
+      button.setAttribute("aria-label", active ? "Manage or cancel subscription" : "Upgrade plan");
+      button.addEventListener("click", async () => {
+        const result = await send({
+          type: "openExtPayPayment",
+          planNickname: active ? undefined : plan.nickname || plan.plan_nickname || plan.name
+        });
+        document.getElementById("timer-note").textContent = result?.message ||
+          result?.error || "Checkout opened in a new tab.";
+      });
+      row.append(button);
+    }
+    plansElement.append(row);
+  }
+}
+
 async function refresh() {
   let state = await getState();
-  if (!extPayStatusChecked) {
-    const response = await send({ type: "getExtPayStatus" });
-    extPayStatusChecked = true;
-    state = response?.timers || state;
+  document.querySelector(".test-controls").hidden = !SHOW_TEST_ACCESS;
+  document.getElementById("subscription-toggle").hidden = SHOW_TEST_ACCESS;
+  if (SHOW_TEST_ACCESS) {
+    document.getElementById("subscription-panel").hidden = true;
+  }
+  if (!SHOW_TEST_ACCESS && !subscriptionPlansLoaded) {
+    state = (await refreshSubscription()) || state;
   }
   const isPaid = state.paidMode === true;
-  document.getElementById("test-paid-mode").textContent = isPaid ? "Paid mode" : "Free mode";
-  document.getElementById("test-paid-mode").setAttribute("aria-pressed", String(isPaid));
-  document.getElementById("go-pro").textContent = state.extPayPaid ? "Pro active" : "Go Pro";
-  document.getElementById("go-pro").disabled = state.extPayPaid === true;
+  const testPaidMode = state.testPaidMode === true;
+  document.getElementById("test-paid-mode").textContent = testPaidMode ? "Test Paid" : "Test Free";
+  document.getElementById("test-paid-mode").setAttribute("aria-pressed", String(testPaidMode));
   document.querySelectorAll(".timer-row").forEach(row => {
     const minutes = Number(row.dataset.minutes);
     const freeRestricted = !isPaid && !FREE_INTERVALS.includes(minutes);
@@ -239,11 +363,35 @@ document.getElementById("test-paid-mode").addEventListener("click", async () => 
   await send({ type: "setTestPaidMode", paidMode: document.getElementById("test-paid-mode").getAttribute("aria-pressed") !== "true" });
   await refresh();
 });
-document.getElementById("go-pro").addEventListener("click", async () => {
-  const response = await send({ type: "openExtPayPayment" });
-  document.getElementById("timer-note").textContent = response?.message ||
-    response?.error || "Checkout opened in a new tab.";
+document.getElementById("test-mode-visibility").addEventListener("click", () => {
+  const toggle = document.getElementById("test-paid-mode");
+  const visibility = document.getElementById("test-mode-visibility");
+  const hidden = toggle.hidden;
+  toggle.hidden = !hidden;
+  visibility.textContent = hidden ? "×" : "+";
+  visibility.setAttribute("aria-label", hidden ? "Hide test toggle" : "Show test toggle");
+  visibility.title = hidden ? "Hide test toggle" : "Show test toggle";
 });
+document.getElementById("subscription-toggle").addEventListener("click", async () => {
+  if (SHOW_TEST_ACCESS) return;
+  const panel = document.getElementById("subscription-panel");
+  const toggle = document.getElementById("subscription-toggle");
+  const arrow = document.getElementById("subscription-arrow");
+  const expanded = panel.hidden;
+  panel.hidden = !expanded;
+  toggle.setAttribute("aria-expanded", String(expanded));
+  arrow.textContent = expanded ? "⌃" : "⌄";
+  if (expanded) {
+    await refreshSubscription();
+    clearTimeout(subscriptionHideTimer);
+    subscriptionHideTimer = setTimeout(() => {
+      panel.hidden = true;
+      toggle.setAttribute("aria-expanded", "false");
+      arrow.textContent = "⌄";
+    }, 10000);
+  }
+});
+document.getElementById("subscription-status").addEventListener("click", () => {});
 document.getElementById("start").addEventListener("click", async () => {
   const enabled = Object.fromEntries(intervals.map(minutes => [minutes, document.getElementById(`timer-${minutes}`).checked]));
   await send({ type: "start", enabled, marketOpenTime: document.getElementById("market-open-time").value,
@@ -335,3 +483,6 @@ document.getElementById("save-alert-tone").addEventListener("click", async () =>
 });
 document.getElementById("stop").addEventListener("click", async () => { await send({ type: "stop" }); refresh(); });
 refresh(); setInterval(refresh, 250);
+if (!SHOW_TEST_ACCESS) {
+  subscriptionRefreshTimer = setInterval(refreshSubscription, 180000);
+}

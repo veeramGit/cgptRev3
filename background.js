@@ -12,7 +12,7 @@ const extpay = ExtPay(EXTPAY_APP_ID);
 extpay.startBackground();
 extpay.onPaid.addListener(async user => {
   const state = await getState();
-  state.extPayPaid = Boolean(user?.paidAt);
+  state.extPayPaid = Boolean(user?.paid);
   state.paidMode = state.testPaidMode === true || state.extPayPaid;
   await chrome.storage.local.set({ timers: state });
   await chrome.notifications.create("extpay-paid", {
@@ -197,11 +197,45 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       if (state.running) await restartAllTimers(state);
     }
 
+    if (message.type === "getExtPayPlans") {
+      try {
+        const plans = await extpay.getPlans();
+        let user = null;
+        try {
+          user = await extpay.getUser();
+        } catch (userError) {
+          console.warn("ExtensionPay user status unavailable:", userError);
+        }
+        const state = await getState();
+        const availablePlans = Array.isArray(plans)
+          ? plans
+          : plans?.plans || plans?.data || plans?.items || Object.values(plans || {});
+        state.extPayPaid = Boolean(user?.paid);
+        state.paidMode = state.testPaidMode === true || state.extPayPaid;
+        await chrome.storage.local.set({ timers: state });
+        sendResponse({
+          ok: true,
+          plans: availablePlans.slice(0, 3),
+          user: {
+            paid: state.extPayPaid,
+            paidAt: user?.paidAt || null,
+            subscriptionStatus: user?.subscriptionStatus || null,
+            plan: user?.plan || null
+          },
+          timers: state
+        });
+      } catch (error) {
+        console.warn("ExtensionPay plans unavailable:", error);
+        sendResponse({ ok: false, plans: [], error: "Subscription plans are unavailable." });
+      }
+      return;
+    }
+
     if (message.type === "getExtPayStatus") {
       try {
         const user = await extpay.getUser();
         const state = await getState();
-        state.extPayPaid = Boolean(user?.paidAt);
+        state.extPayPaid = Boolean(user?.paid);
         state.paidMode = state.testPaidMode === true || state.extPayPaid;
         await chrome.storage.local.set({ timers: state });
         sendResponse({ ok: true, timers: state, extPayConfigured: true });
@@ -215,7 +249,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     if (message.type === "openExtPayPayment") {
       try {
-        await extpay.openPaymentPage();
+        await extpay.openPaymentPage(message.planNickname || undefined);
+        const state = await getState();
+        if (state.running) await restartAllTimers(state);
         sendResponse({ ok: true, message: "Checkout opened in a new tab." });
       } catch (error) {
         console.warn("ExtensionPay checkout unavailable:", error);

@@ -11,6 +11,11 @@
       <img src="icon128.png" alt="NSE Timer logo">
       <div class="app-title">
         <h1>NSE Timer v1.4</h1>
+        <div class="app-subtitle-row">
+          <button type="button" id="subscription-toggle" class="subscription-summary" aria-expanded="false">
+            <span id="subscription-summary">Checking...</span><span id="subscription-arrow" aria-hidden="true">⌄</span>
+          </button>
+        </div>
       </div>
       <label class="market-selector" for="market-select">
         <span>Market</span>
@@ -30,13 +35,23 @@
       </label>
     </header>
 
-    <div class="access-mode">
-      <span>Test access</span>
-      <button type="button" id="test-paid-mode" aria-pressed="false">Free mode</button>
-      <button type="button" id="go-pro">Go Pro</button>
-    </div>
+    <section id="subscription-panel" class="subscription-panel" aria-labelledby="subscription-heading" hidden>
+      <div class="subscription-heading-row">
+        <h2 id="subscription-heading">Subscription</h2>
+        <span id="subscription-status">Checking status...</span>
+      </div>
+      <div id="subscription-plans" class="subscription-plans" aria-live="polite">
+        <span>Loading plans...</span>
+      </div>
+    </section>
 
-    <div class="actual-time" align="right">Current time: <time id="actual-time" style="color: darkblue;">--:--:--</time></div>
+    <div class="time-row">
+      <div class="test-controls" aria-label="Temporary test access controls">
+        <button type="button" id="test-paid-mode" class="test-mode-toggle" aria-pressed="false">Test Free</button>
+        <button type="button" id="test-mode-visibility" class="test-mode-visibility" aria-label="Hide test toggle" title="Hide test toggle">×</button>
+      </div>
+      <div class="actual-time">Current time: <time id="actual-time" style="color: darkblue;">--:--:--</time></div>
+    </div>
 
     <div class="market-open">
       <span class="market-timing-label">Market Timing</span>
