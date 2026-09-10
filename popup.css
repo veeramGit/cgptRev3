@@ -130,6 +130,10 @@ h3 {
   display: none;
 }
 
+[data-pro-feature][hidden] {
+  display: none;
+}
+
 .subscription-heading-row,
 .subscription-plan {
   display: flex;
@@ -189,6 +193,26 @@ h3 {
   background: #2d9b50;
   color: #fff;
   font-size: 10px;
+}
+
+.subscription-plan .plan-preview-button {
+  margin-left: auto;
+  border-color: #9aaec2;
+  background: #eef3f7;
+  color: #145da0;
+}
+
+.plan-preview {
+  margin-top: 6px;
+  padding: 5px 6px;
+  border-top: 1px solid #d7e1eb;
+  color: #425466;
+  font-size: 10px;
+}
+
+.plan-preview ul {
+  margin: 3px 0 0 15px;
+  padding: 0;
 }
 
 .active-plan button {

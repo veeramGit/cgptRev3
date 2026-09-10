@@ -99,6 +99,41 @@ function planAmountCents(plan) {
   return amount == null ? Number.POSITIVE_INFINITY : Number(amount);
 }
 
+function getPlanPreview(plan) {
+  const isLifetime = plan.interval === "once";
+  const title = isLifetime ? "ProLife" : "Pro365";
+  const features = isLifetime
+    ? [
+      "Everything in Pro365",
+      "All chart intervals",
+      "Custom alert timing and tones",
+      "Upcoming premium features included"
+    ]
+    : [
+      "1, 3, 5, 15, and 60-minute timers",
+      "Custom alert timing up to 180 seconds",
+      "All alert tones",
+      "Premium market timer controls"
+    ];
+  return { title, features };
+}
+
+function showPlanPreview(plan) {
+  const preview = document.getElementById("plan-preview");
+  const content = getPlanPreview(plan);
+  preview.replaceChildren();
+  const heading = document.createElement("strong");
+  heading.textContent = `${content.title} preview`;
+  const list = document.createElement("ul");
+  for (const feature of content.features) {
+    const item = document.createElement("li");
+    item.textContent = feature;
+    list.append(item);
+  }
+  preview.append(heading, list);
+  preview.hidden = false;
+}
+
 async function refreshSubscription() {
   if (SHOW_TEST_ACCESS) return;
   if (subscriptionRefreshInProgress) return;
@@ -146,6 +181,14 @@ function renderSubscriptionPlans(response) {
     const details = document.createElement("span");
     details.textContent = `${formatPlanName(plan)} - ${formatPlanPrice(plan)}${active ? " (Active)" : ""}`;
     row.append(details);
+    const previewButton = document.createElement("button");
+    previewButton.type = "button";
+    previewButton.className = "plan-preview-button";
+    previewButton.textContent = "◉";
+    previewButton.title = `Preview ${getPlanPreview(plan).title}`;
+    previewButton.setAttribute("aria-label", `Preview ${getPlanPreview(plan).title}`);
+    previewButton.addEventListener("click", () => showPlanPreview(plan));
+    row.append(previewButton);
     if (active || !activePlan || isHigherPlan) {
       const button = document.createElement("button");
       button.type = "button";
@@ -179,6 +222,9 @@ async function refresh() {
   const isPaid = state.paidMode === true;
   const testPaidMode = state.testPaidMode === true;
   document.getElementById("test-paid-mode").checked = testPaidMode;
+  document.querySelectorAll("[data-pro-feature]").forEach(feature => {
+    feature.hidden = !isPaid;
+  });
   document.querySelectorAll(".timer-row").forEach(row => {
     const minutes = Number(row.dataset.minutes);
     const freeRestricted = !isPaid && !FREE_INTERVALS.includes(minutes);
