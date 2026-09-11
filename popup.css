@@ -130,7 +130,9 @@ h3 {
   display: none;
 }
 
-[data-pro-feature][hidden] {
+.pro-feature-content[hidden],
+[data-pro-feature][hidden],
+[data-pro-preview][hidden] {
   display: none;
 }
 
@@ -185,9 +187,10 @@ h3 {
 }
 
 .subscription-plan button {
-  width: 22px;
+  width: auto;
+  min-width: 22px;
   height: 20px;
-  padding: 0;
+  padding: 2px 5px;
   border: 1px solid #2d8a4a;
   border-radius: 3px;
   background: #2d9b50;
@@ -197,6 +200,8 @@ h3 {
 
 .subscription-plan .plan-preview-button {
   margin-left: auto;
+  width: auto;
+  padding: 2px 5px;
   border-color: #9aaec2;
   background: #eef3f7;
   color: #145da0;
@@ -213,6 +218,10 @@ h3 {
 .plan-preview ul {
   margin: 3px 0 0 15px;
   padding: 0;
+}
+
+.plan-preview p {
+  margin: 5px 0 0;
 }
 
 .active-plan button {

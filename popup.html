@@ -43,7 +43,6 @@
       <div id="subscription-plans" class="subscription-plans" aria-live="polite">
         <span>Loading plans...</span>
       </div>
-      <div id="plan-preview" class="plan-preview" hidden aria-live="polite"></div>
     </section>
 
     <div class="time-row">
@@ -62,9 +61,10 @@
       </span>
     </div>
 
-    <details class="settings-panel alert-settings" data-pro-feature>
+    <details class="settings-panel alert-settings">
       <summary id="alert-timing-heading">Alert Time</summary>
-      <div class="alert-line">
+      <div class="pro-feature-content" data-pro-preview>
+        <div class="alert-line">
         <span class="alert-label">Alert</span>
         <label><input type="radio" name="alert-timing" value="before" checked> Before</label>
         <label><input type="radio" name="alert-timing" value="after"> After</label>
@@ -80,13 +80,15 @@
         </span>
         <span>Secs</span>
         <button type="button" id="save-alert-timing" disabled aria-label="Apply alert settings" title="Update">✓</button>
+        </div>
+        <p id="alert-timing-confirmation" class="alert-timing-confirmation" aria-live="polite"></p>
       </div>
-      <p id="alert-timing-confirmation" class="alert-timing-confirmation" aria-live="polite"></p>
     </details>
 
-    <details class="settings-panel audio-settings" data-pro-feature>
+    <details class="settings-panel audio-settings">
       <summary id="alert-sound-heading">Alert Sound</summary>
-      <div class="audio-line">
+      <div class="pro-feature-content" data-pro-preview>
+        <div class="audio-line">
         <span class="audio-label">Sound</span>
         <span class="tone-option">
           <label><input type="radio" name="alert-tone" value="beep" checked> Beep</label>
@@ -99,19 +101,20 @@
         </span>
         <button type="button" class="try-tone">Try</button>
         <button type="button" id="save-alert-tone" disabled>Fix</button>
+        </div>
+        <p id="alert-tone-confirmation" class="audio-confirmation" aria-live="polite"></p>
       </div>
-      <p id="alert-tone-confirmation" class="audio-confirmation" aria-live="polite"></p>
     </details>
 
     <h3>Select Active Chart Intervals:</h3>
 
-    <div class="timer-row" data-minutes="1" data-pro-feature>
+    <div class="timer-row" data-minutes="1" data-pro-preview>
       <input type="checkbox" id="timer-1">
       <label for="timer-1">1 Minute Timer</label>
       <span id="status-1">Disabled</span>
     </div>
 
-    <div class="timer-row" data-minutes="3" data-pro-feature>
+    <div class="timer-row" data-minutes="3" data-pro-preview>
       <input type="checkbox" id="timer-3">
       <label for="timer-3">3 Minute Timer</label>
       <span id="status-3">Disabled</span>
@@ -129,7 +132,7 @@
       <span id="status-15">Disabled</span>
     </div>
 
-    <div class="timer-row" data-minutes="60" data-pro-feature>
+    <div class="timer-row" data-minutes="60" data-pro-preview>
       <input type="checkbox" id="timer-60">
       <label for="timer-60">1 Hour Timer</label>
       <span id="status-60">Disabled</span>

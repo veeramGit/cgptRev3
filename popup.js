@@ -18,6 +18,7 @@ let subscriptionPlansLoaded = false;
 let subscriptionRefreshInProgress = false;
 let subscriptionRefreshTimer;
 let subscriptionHideTimer;
+let proPreviewActive = false;
 let previewAudioContext;
 const PREVIEW_TONES = {
   beep: [{ frequency: 880, duration: 0.3, delay: 0, wave: "sine" }],
@@ -99,39 +100,11 @@ function planAmountCents(plan) {
   return amount == null ? Number.POSITIVE_INFINITY : Number(amount);
 }
 
-function getPlanPreview(plan) {
-  const isLifetime = plan.interval === "once";
-  const title = isLifetime ? "ProLife" : "Pro365";
-  const features = isLifetime
-    ? [
-      "Everything in Pro365",
-      "All chart intervals",
-      "Custom alert timing and tones",
-      "Upcoming premium features included"
-    ]
-    : [
-      "1, 3, 5, 15, and 60-minute timers",
-      "Custom alert timing up to 180 seconds",
-      "All alert tones",
-      "Premium market timer controls"
-    ];
-  return { title, features };
-}
-
 function showPlanPreview(plan) {
-  const preview = document.getElementById("plan-preview");
-  const content = getPlanPreview(plan);
-  preview.replaceChildren();
-  const heading = document.createElement("strong");
-  heading.textContent = `${content.title} preview`;
-  const list = document.createElement("ul");
-  for (const feature of content.features) {
-    const item = document.createElement("li");
-    item.textContent = feature;
-    list.append(item);
-  }
-  preview.append(heading, list);
-  preview.hidden = false;
+  proPreviewActive = true;
+  document.querySelectorAll("[data-pro-preview]").forEach(feature => {
+    feature.hidden = false;
+  });
 }
 
 async function refreshSubscription() {
@@ -184,15 +157,15 @@ function renderSubscriptionPlans(response) {
     const previewButton = document.createElement("button");
     previewButton.type = "button";
     previewButton.className = "plan-preview-button";
-    previewButton.textContent = "◉";
-    previewButton.title = `Preview ${getPlanPreview(plan).title}`;
-    previewButton.setAttribute("aria-label", `Preview ${getPlanPreview(plan).title}`);
+    previewButton.textContent = "Preview";
+    previewButton.title = "Preview plan features";
+    previewButton.setAttribute("aria-label", "Preview plan features");
     previewButton.addEventListener("click", () => showPlanPreview(plan));
-    row.append(previewButton);
+    if (!active) row.append(previewButton);
     if (active || !activePlan || isHigherPlan) {
       const button = document.createElement("button");
       button.type = "button";
-      button.textContent = active ? "×" : "↑";
+      button.textContent = active ? "Cancel" : "Upgrade";
       button.title = active ? "Manage or cancel subscription" : "Upgrade plan";
       button.setAttribute("aria-label", active ? "Manage or cancel subscription" : "Upgrade plan");
       button.addEventListener("click", async () => {
@@ -222,9 +195,15 @@ async function refresh() {
   const isPaid = state.paidMode === true;
   const testPaidMode = state.testPaidMode === true;
   document.getElementById("test-paid-mode").checked = testPaidMode;
-  document.querySelectorAll("[data-pro-feature]").forEach(feature => {
-    feature.hidden = !isPaid;
+  document.querySelectorAll("[data-pro-preview]").forEach(feature => {
+    feature.hidden = !isPaid && !proPreviewActive;
   });
+  document.getElementById("alert-timing-heading").textContent = isPaid
+    ? `Alert Time: ${state.alertOffsetSeconds} Secs ${capitalize(state.alertTiming)}`
+    : "Alert Time: 15 Secs Before";
+  document.getElementById("alert-sound-heading").textContent = isPaid
+    ? `Alert Sound: ${capitalize(state.alertTone)}`
+    : "Alert Sound: Beep";
   document.querySelectorAll(".timer-row").forEach(row => {
     const minutes = Number(row.dataset.minutes);
     const freeRestricted = !isPaid && !FREE_INTERVALS.includes(minutes);
@@ -250,8 +229,9 @@ async function refresh() {
   if (!alertTimingDirty) {
     document.querySelector(`input[name="alert-timing"][value="${state.alertTiming}"]`).checked = true;
   }
-  document.getElementById("alert-timing-heading").textContent =
-    `Alert Time: ${state.alertOffsetSeconds} Secs ${capitalize(state.alertTiming)}`;
+  document.getElementById("alert-timing-heading").textContent = isPaid
+    ? `Alert Time: ${state.alertOffsetSeconds} Secs ${capitalize(state.alertTiming)}`
+    : "Alert Time: 15 Secs Before";
   const offsetInput = document.getElementById("alert-offset-seconds");
   if (!alertTimingDirty && document.activeElement !== offsetInput) {
     offsetInput.value = state.alertOffsetSeconds;
@@ -260,8 +240,9 @@ async function refresh() {
   if (!alertToneDirty) {
     document.querySelector(`input[name="alert-tone"][value="${state.alertTone}"]`).checked = true;
   }
-  document.getElementById("alert-sound-heading").textContent =
-    `Alert Sound: ${capitalize(state.alertTone)}`;
+  document.getElementById("alert-sound-heading").textContent = isPaid
+    ? `Alert Sound: ${capitalize(state.alertTone)}`
+    : "Alert Sound: Beep";
   document.getElementById("save-alert-tone").disabled = !alertToneDirty;
   for (const minutes of intervals) {
     const item = state.intervals[minutes];
